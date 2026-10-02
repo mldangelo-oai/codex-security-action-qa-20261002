@@ -1,0 +1,80 @@
+name: Action live QA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-live-qa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  live-scan:
+    name: Model-backed Action scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan the synthetic fixture
+        id: security
+        uses: dans-oai/codex-security@0078f5e6bf56e9be368dfb5ac4140c02119ab95d
+        with:
+          scope: repository
+          paths: fixture
+          mode: standard
+          model: gpt-5.6-sol
+          effort: low
+          max-cost: '1'
+          fail-on-severity: none
+          upload-artifacts: 'true'
+          artifact-name: synthetic-model-scan
+          retention-days: '1'
+        env:
+          OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
+      - name: Require complete scan and validated SARIF
+        env:
+          SCAN_STATUS: ${{ steps.security.outputs.scan-status }}
+          POLICY_STATUS: ${{ steps.security.outputs.policy-status }}
+          REPORT_STATUS: ${{ steps.security.outputs.report-status }}
+          SARIF_READY: ${{ steps.security.outputs.sarif-upload-ready }}
+          SCANNED_SHA: ${{ steps.security.outputs.scanned-sha }}
+        run: |
+          test "$SCAN_STATUS" = completed
+          test "$POLICY_STATUS" = passed
+          test "$REPORT_STATUS" = ready
+          test "$SARIF_READY" = true
+          test "$SCANNED_SHA" = "$GITHUB_SHA"
+      - name: Upload Action-produced SARIF
+        if: ${{ always() && steps.security.outputs.sarif-upload-ready == 'true' }}
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: ${{ steps.security.outputs.sarif-path }}
+          sha: ${{ steps.security.outputs.scanned-sha }}
+          ref: ${{ steps.security.outputs.analysis-ref }}
+          category: synthetic-model-scan
+          wait-for-processing: 'true'
+
+  ingestion-control:
+    name: Synthetic SARIF ingestion control
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Upload an explicitly synthetic warning
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: qa/ingestion-control.sarif
+          category: synthetic-ingestion-control
+          wait-for-processing: 'true'

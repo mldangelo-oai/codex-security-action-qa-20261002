@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Synthetic SARIF Ingestion Control",
+          "version": "1.0.0",
+          "rules": [
+            {
+              "id": "synthetic-ingestion-marker",
+              "shortDescription": {
+                "text": "Synthetic ingestion control; not a vulnerability"
+              },
+              "defaultConfiguration": { "level": "warning" },
+              "properties": { "tags": ["synthetic", "qa"] }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "synthetic-ingestion-marker",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {
+            "text": "This deliberately generated test marker verifies SARIF ingestion. It does not identify a vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "fixture/app.py" },
+                "region": { "startLine": 6 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
