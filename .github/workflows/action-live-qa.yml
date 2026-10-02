@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - name: Scan the synthetic fixture
         id: security
-        uses: dans-oai/codex-security@0078f5e6bf56e9be368dfb5ac4140c02119ab95d
+        uses: dans-oai/codex-security@86ef34f489c4374dbd19b49ff70f158d5e5c1a94
         with:
           scope: repository
           paths: fixture

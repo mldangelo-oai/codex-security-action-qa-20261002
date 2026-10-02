@@ -2,7 +2,7 @@
 
 This public repository contains only synthetic code and a manually triggered
 workflow for testing the Codex Security GitHub Action at commit
-`0078f5e6bf56e9be368dfb5ac4140c02119ab95d`.
+`86ef34f489c4374dbd19b49ff70f158d5e5c1a94`.
 
 The **Action live QA** workflow runs two independent checks:
 
