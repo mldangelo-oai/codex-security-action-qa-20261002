@@ -40,11 +40,11 @@ jobs:
           mode: standard
           model: gpt-5.6-sol
           effort: low
-          max-cost: '5'
+          max-cost: "5"
           fail-on-severity: none
-          upload-artifacts: 'true'
+          upload-artifacts: "true"
           artifact-name: synthetic-model-scan
-          retention-days: '1'
+          retention-days: "1"
         env:
           OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
       - name: Require complete scan and validated SARIF
@@ -68,7 +68,7 @@ jobs:
           sha: ${{ steps.security.outputs.scanned-sha }}
           ref: ${{ steps.security.outputs.analysis-ref }}
           category: synthetic-model-scan
-          wait-for-processing: 'true'
+          wait-for-processing: "true"
 
   ingestion-control:
     name: Synthetic SARIF ingestion control
@@ -87,7 +87,7 @@ jobs:
         with:
           sarif_file: qa/ingestion-control.sarif
           category: synthetic-ingestion-control
-          wait-for-processing: 'true'
+          wait-for-processing: "true"
 
   diff-scan:
     name: Model-backed PR severity failure and SARIF upload
@@ -118,11 +118,11 @@ jobs:
           scope: diff
           model: gpt-5.6-sol
           effort: low
-          max-cost: '5'
+          max-cost: "5"
           fail-on-severity: low
-          upload-artifacts: 'true'
+          upload-artifacts: "true"
           artifact-name: synthetic-pr-scan
-          retention-days: '1'
+          retention-days: "1"
         env:
           OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
       - name: Require a completed scan with the expected severity failure
@@ -152,4 +152,4 @@ jobs:
           sha: ${{ steps.security.outputs.scanned-sha }}
           ref: ${{ steps.security.outputs.analysis-ref }}
           category: synthetic-pr-scan
-          wait-for-processing: 'true'
+          wait-for-processing: "true"
