@@ -2,6 +2,9 @@ name: Action live QA
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths: ["fixture/**"]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -13,6 +16,7 @@ concurrency:
 jobs:
   live-scan:
     name: Model-backed Action scan
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -22,16 +26,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Set up the Ubuntu sandbox
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap apparmor-profiles
+          sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
       - name: Scan the synthetic fixture
         id: security
-        uses: dans-oai/codex-security@86ef34f489c4374dbd19b49ff70f158d5e5c1a94
+        uses: openai/codex-security@6091910126a2adf5d0b6081e80818e3812d6fb36
         with:
           scope: repository
           paths: fixture
           mode: standard
           model: gpt-5.6-sol
           effort: low
-          max-cost: '1'
+          max-cost: '5'
           fail-on-severity: none
           upload-artifacts: 'true'
           artifact-name: synthetic-model-scan
@@ -63,6 +72,7 @@ jobs:
 
   ingestion-control:
     name: Synthetic SARIF ingestion control
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -77,4 +87,69 @@ jobs:
         with:
           sarif_file: qa/ingestion-control.sarif
           category: synthetic-ingestion-control
+          wait-for-processing: 'true'
+
+  diff-scan:
+    name: Model-backed PR severity failure and SARIF upload
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up the Ubuntu sandbox
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap apparmor-profiles
+          sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+      - name: Scan the intentional synthetic vulnerability
+        id: security
+        continue-on-error: true
+        uses: openai/codex-security@6091910126a2adf5d0b6081e80818e3812d6fb36
+        with:
+          scope: diff
+          model: gpt-5.6-sol
+          effort: low
+          max-cost: '5'
+          fail-on-severity: low
+          upload-artifacts: 'true'
+          artifact-name: synthetic-pr-scan
+          retention-days: '1'
+        env:
+          OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
+      - name: Require a completed scan with the expected severity failure
+        env:
+          OUTCOME: ${{ steps.security.outcome }}
+          SCAN_STATUS: ${{ steps.security.outputs.scan-status }}
+          POLICY_STATUS: ${{ steps.security.outputs.policy-status }}
+          REPORT_STATUS: ${{ steps.security.outputs.report-status }}
+          SARIF_READY: ${{ steps.security.outputs.sarif-upload-ready }}
+          SCANNED_SHA: ${{ steps.security.outputs.scanned-sha }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          ANALYSIS_REF: ${{ steps.security.outputs.analysis-ref }}
+          EXPECTED_REF: refs/pull/${{ github.event.pull_request.number }}/head
+        run: |
+          test "$OUTCOME" = failure
+          test "$SCAN_STATUS" = completed
+          test "$POLICY_STATUS" = failed
+          test "$REPORT_STATUS" = ready
+          test "$SARIF_READY" = true
+          test "$SCANNED_SHA" = "$EXPECTED_SHA"
+          test "$ANALYSIS_REF" = "$EXPECTED_REF"
+      - name: Upload SARIF after the severity failure
+        if: ${{ always() && steps.security.outputs.sarif-upload-ready == 'true' }}
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: ${{ steps.security.outputs.sarif-path }}
+          sha: ${{ steps.security.outputs.scanned-sha }}
+          ref: ${{ steps.security.outputs.analysis-ref }}
+          category: synthetic-pr-scan
           wait-for-processing: 'true'
